@@ -1,0 +1,28 @@
+version: "3.7"
+services:
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+  app:
+    build:
+      context: ./src
+      dockerfile: Dockerfile.app
+    image: jrhuerta/celery-demo:app
+    ports:
+      - "5000:5000"
+  worker:
+    build:
+      context: ./src
+      dockerfile: Dockerfile.worker
+    image: jrhuerta/celery-demo:worker
+  monitor:
+    build:
+      context: ./src
+      dockerfile: Dockerfile.monitor
+    image: jrhuerta/celery-demo:monitor
+    ports:
+      - "9540:9540"
+    volumes:
+    - "./src:/app"
+
