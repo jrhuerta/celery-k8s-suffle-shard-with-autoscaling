@@ -21,6 +21,9 @@ services:
       context: ./src
       dockerfile: Dockerfile.monitor
     image: jrhuerta/celery-demo:monitor
+    environment:
+      CELERY_MONITOR_QUEUES: "queue1001,queue1002,queue1003"
+    command: ["python", "monitor.py", "-d"]
     ports:
       - "9540:9540"
     volumes:

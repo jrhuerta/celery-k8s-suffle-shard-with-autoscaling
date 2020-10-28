@@ -22,15 +22,19 @@ WORKERS = prometheus_client.Gauge(
 
 
 class BrokerMonitorThread(threading.Thread):
-    def __init__(self, app, *args, **kwargs):
-        self._app = app
-        self._logger = logging.getLogger("queue-monitor")
+    def __init__(self, broker_url, *args, **kwargs):
+        self._app = Celery(broker=broker_url)
+
+        self._logger = logging.getLogger("broker-monitor")
         super(BrokerMonitorThread, self).__init__(*args, **kwargs)
 
     def _append_queue(self, event):
         try:
-            _monitored_queues.add(event.get("queue"))
-            self._logger.debug(event)
+            self._log_event(event)
+            queue_name = event.get("queue")
+            if queue_name not in _monitored_queues:
+                self._logger.info("%s: added to monitored queues." % queue_name)
+            _monitored_queues.add(queue_name)
         except Exception:
             self._logger.exception("Unable to add queue from event. %r", event)
 
@@ -83,7 +87,7 @@ def shutdown(signum, frame):  # pragma: no cover
     sys.exit(0)
 
 
-@click.command(context_settings={"auto_envvar_prefix": "CELERY_EXPORTER"})
+@click.command(context_settings={"auto_envvar_prefix": "CELERY_MONITOR"})
 @click.option(
     "--broker-url",
     "-b",
@@ -124,18 +128,18 @@ def shutdown(signum, frame):  # pragma: no cover
     "--dynamic",
     "-d",
     is_flag=True,
-    default=True,
-    show_default=True,
-    help="Dynamically detect new queues.",
+    show_envvar=True,
+    help="Detect new queues dynamically.",
 )
 @click.option(
     "--queues",
     "-q",
     type=click.STRING,
+    show_envvar=True,
     help="Comma separated list of queues to monitor.",
 )
 @click.option(
-    "--verbose", is_flag=True, allow_from_autoenv=False, help="Enable verbose logging."
+    "--verbose", "-v", is_flag=True, show_envvar=True, help="Enable verbose logging."
 )
 def main(broker_url, listen_address, namespace, dynamic, queues, refresh, verbose):
     if verbose:
@@ -143,11 +147,13 @@ def main(broker_url, listen_address, namespace, dynamic, queues, refresh, verbos
     else:
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-    _monitored_queues.update([c.strip() for c in queues.split(',')])
-    app = Celery(broker=broker_url)
+    _monitored_queues.update([c.strip() for c in queues.split(",")])
+    if _monitored_queues:
+        logging.info("Queues: %r" % _monitored_queues)
 
     if dynamic:
-        qm = BrokerMonitorThread(app=app)
+        logging.info("Dynamic queue detection enabled.")
+        qm = BrokerMonitorThread(broker_url=broker_url)
         qm.daemon = True
         qm.start()
 
