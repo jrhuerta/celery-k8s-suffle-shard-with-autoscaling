@@ -25,16 +25,23 @@ class ShardManager:
         self, shard_name: str, total_queues: int, queues_per_set: int, redis: Redis
     ):
         self._shard_name = f"shardmanager:{shard_name}"
+        self._total_queues = total_queues
+        self._queues_per_set = queues_per_set
         self._unasigned_shards_key = f"{self._shard_name}:unasigned_shards"
         self._redis = redis
-        self.generate_shards(total_queues, queues_per_set)
 
-    def _clear_shard_assignments(self):
-        keys = self._redis.get(f"{self._shard_name}*")
-        self._redis.delete(*keys)
+    def clear_shard_assignments(self):
+        keys = self._redis.keys(f"{self._shard_name}*")
+        if keys:
+            logging.info("keys deleted: %s" % keys)
+            self._redis.delete(*keys)
 
     def generate_shards(self, total_queues: int, queues_per_set: int):
-        self._clear_shard_assignments()
+        if self._redis.exists(self._unasigned_shards_key):
+            logging.info(
+                "%s: already exists, nothing to do" % self._unasigned_shards_key
+            )
+            return
         shards = [
             json.dumps(t)
             for t in itertools.combinations(range(total_queues), queues_per_set)
@@ -42,16 +49,22 @@ class ShardManager:
         random.shuffle(shards)
         self._redis.lpush(
             self._unasigned_shards_key,
-            shards,
+            *shards,
         )
 
     def get_queue(self, tenant: str) -> str:
         ts_name = f"{self._shard_name}:{tenant}"
         queue = self._redis.rpoplpush(ts_name, ts_name)
-        if queue is None:
-            nshard = json.loads(self._redis.rpop(self._unasigned_shards_key))
-            self._redis.lpush(ts_name, *nshard)
-            queue = self._redis.rpoplpush(ts_name, ts_name)
+        if queue:
+            return queue.decode("utf-8")
+        nshards = self._redis.rpop(self._unasigned_shards_key)
+        if not nshards:
+            self.clear_shard_assignments()
+            self.generate_shards(self._total_queues, self._queues_per_set)
+            nshards = self._redis.rpop(self._unasigned_shards_key)
+        nshard = json.loads(nshards)
+        self._redis.lpush(ts_name, *nshard)
+        queue = self._redis.rpoplpush(ts_name, ts_name)
         return queue.decode("utf-8")
 
 
@@ -70,7 +83,9 @@ def sleep(t):
     time.sleep(t)
 
 
-@fapp.route("/status", methods=["GET"])
+fapp.route("/status", methods=["GET"])
+
+
 def app_status():
     return jsonify({"status": "OK"})
 
@@ -86,15 +101,20 @@ def task_create(tenant):
 
 @fapp.route("/shards/regenerate", methods=["POST"])
 def shards_setup():
+    total_queues = 20
+    queues_per_set = 5
     try:
-        data = request.json()
-        shard_manager.generate_shards(data["total_queues"], data["queues_per_set"])
-        return jsonify(
-            {
-                "total_queues": data["total_queues"],
-                "queues_per_set": data["queues_per_set"],
-                "message": "Success",
-            }
-        )
+        if request.json:
+            total_queues = request.json["total_queues"]
+            queues_per_set = request.json["queues_per_set"]
     except KeyError:
         abort(400)
+    shard_manager.clear_shard_assignments()
+    shard_manager.generate_shards(total_queues, queues_per_set)
+    return jsonify(
+        {
+            "total_queues": total_queues,
+            "queues_per_set": queues_per_set,
+            "message": "Success",
+        }
+    )
