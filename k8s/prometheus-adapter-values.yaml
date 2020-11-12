@@ -1,0 +1,13 @@
+logLevel: 4
+prometheus:
+  url: http://prometheus-server.prometheus.svc
+  port: 80
+rules:
+  default:
+  external:
+    - seriesQuery: 'celery_queue_length{kubernetes_namespace!=""}'
+      resources:
+        overrides:
+          kubernetes_namespace:
+            resource: namespace
+      metricsQuery: <<.Series>>{<<.LabelMatchers>>}

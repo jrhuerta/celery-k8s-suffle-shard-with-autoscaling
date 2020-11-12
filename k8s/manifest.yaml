@@ -1,0 +1,271 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: celery-demo
+  labels:
+    name: celery-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: celery-demo
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:5
+        ports:
+        - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: celery-demo
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: celery-demo
+  labels:
+    app: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: web
+        image: jrhuerta/celery-demo:app
+        imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: celery-demo
+  labels:
+    app: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+      - name: worker
+        image: jrhuerta/celery-demo:worker
+        imagePullPolicy: Always
+        env:
+          - name: CELERY_QUEUES
+            value: queue1001
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-worker
+  namespace: celery-demo
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: 1
+  maxReplicas: 20
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: celery_queue_length
+        selector:
+          matchLabels:
+            queue: queue1001
+      target:
+        type: AverageValue
+        averageValue: 50
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-monitor
+  namespace: celery-demo
+  labels:
+    app: celery-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-monitor
+  template:
+    metadata:
+      labels:
+        app: celery-monitor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /
+        prometheus.io/port: "9540"
+    spec:
+      containers:
+      - name: celery-monitor
+        image: jrhuerta/celery-demo:monitor
+        env:
+        - name: CELERY_MONITOR_BROKER_URL
+          value: redis://redis:6379/0
+        - name: CELERY_MONITOR_NAMESPACE
+          value: default
+        - name: CELERY_MONITOR_QUEUES
+          value: "queue1001,queue1002,queue1003"
+        imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-exporter
+  namespace: celery-demo
+  labels:
+    app: celery-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-exporter
+  template:
+    metadata:
+      labels:
+        app: celery-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /
+        prometheus.io/port: "9540"
+    spec:
+      containers:
+      - name: queue-monitor
+        image: ovalmoney/celery-exporter
+        env:
+        - name: CELERY_EXPORTER_BROKER_URL
+          value: redis://redis:6379/0
+        - name: CELERY_EXPORTER_NAMESPACE
+          value: default
+        imagePullPolicy: IfNotPresent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flower
+  namespace: celery-demo
+  labels:
+    app: flower
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flower
+  template:
+    metadata:
+      labels:
+        app: flower
+    spec:
+      containers:
+      - name: flower
+        image: jrhuerta/celery-demo:flower
+        env:
+        - name: FLOWER_PORT
+          value: "5555"
+        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flower
+  namespace: celery-demo
+spec:
+  selector:
+    app: flower
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5555
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: celery-demo
+spec:
+  selector:
+    app: web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ingress
+  namespace: celery-demo
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: celery-demo.minikube
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flower-ingress
+  namespace: celery-demo
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: flower.minikube
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: flower
+            port:
+              number: 80
