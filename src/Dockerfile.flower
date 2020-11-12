@@ -1,0 +1,10 @@
+FROM python:3
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir celery[redis]==4.* flower
+
+ENV FLOWER_BROKER_URL redis://redis:6379/0
+ENV FLOWER_PORT 5555
+
+CMD flower --port=$FLOWER_PORT --broker=$FLOWER_BROKER_URL

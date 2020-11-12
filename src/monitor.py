@@ -148,7 +148,7 @@ def main(broker_url, listen_address, namespace, dynamic, queues, refresh, verbos
     else:
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-    _monitored_queues.update([c.strip() for c in queues.split(",")])
+    _monitored_queues.update(filter(None, [c.strip() for c in queues.split(",")]))
     if _monitored_queues:
         logging.info("Queues: %r" % _monitored_queues)
 

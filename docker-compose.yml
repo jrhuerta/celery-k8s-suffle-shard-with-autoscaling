@@ -8,14 +8,22 @@ services:
     build:
       context: ./src
       dockerfile: Dockerfile.app
+    environment:
+      CELERY_BROKER_URL: "redis://redis:6379/0"
+      CELERY_QUEUES_TOTAL: 10
+      CELERY_QUEUES_PER_SET: 5
     image: jrhuerta/celery-demo:app
     ports:
       - "5000:5000"
+    volumes:
+      - "./src:/app"
   worker:
     build:
       context: ./src
       dockerfile: Dockerfile.worker
     image: jrhuerta/celery-demo:worker
+#    volumes:
+#      - "./src:/app"
   monitor:
     build:
       context: ./src
