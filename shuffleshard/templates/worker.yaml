@@ -1,0 +1,32 @@
+{{- range  $i, $e := until (.Values.queues.count | int) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Values.worker.name }}-{{ $i }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: {{ $.Values.worker.name }}
+    queue: {{ $.Values.queues.prefix }}{{$i}}
+spec:
+  replicas: {{ $.Values.worker.minReplicas }}
+  selector:
+    matchLabels:
+      app: {{ $.Values.worker.name }}
+      queue: {{ $.Values.queues.prefix }}{{$i}}
+  template:
+    metadata:
+      labels:
+        app: {{ $.Values.worker.name }}
+        queue: {{ $.Values.queues.prefix }}{{$i}}
+    spec:
+      containers:
+      - name: {{ $.Values.worker.name }}
+        image: "{{ $.Values.worker.image }}"
+        imagePullPolicy: {{ $.Values.worker.pullPolicy }}
+        env:
+          - name: CELERY_BROKER_URL
+            value: "{{ $.Values.queues.brokerUrl }}"
+          - name: CELERY_QUEUES
+            value: "{{ $.Values.queues.prefix }}{{$i}}"
+{{- end }}

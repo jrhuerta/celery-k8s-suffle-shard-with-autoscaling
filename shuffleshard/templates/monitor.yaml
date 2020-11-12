@@ -1,0 +1,33 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue-monitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: queue-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: queue-monitor
+  template:
+    metadata:
+      labels:
+        app: queue-monitor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /
+        prometheus.io/port: "9540"
+    spec:
+      containers:
+      - name: queue-monitor
+        image: {{ .Values.monitor.image }}
+        env:
+        - name: CELERY_MONITOR_BROKER_URL
+          value: {{ .Values.queues.brokerUrl }}
+        - name: CELERY_MONITOR_NAMESPACE
+          value: {{ .Values.monitor.namespace }}
+        - name: CELERY_MONITOR_QUEUES
+          value: "{{ range  $i, $e := until (.Values.queues.count | int) }}{{ $.Values.queues.prefix }}{{ $i }},{{ end }}"
+        imagePullPolicy: {{ .Values.monitor.pullPolicy }}

@@ -1,0 +1,26 @@
+{{- range  $i, $e := until (.Values.queues.count | int) }}
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpa-{{ $.Values.worker.name }}-{{ $i }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Values.worker.name }}-{{ $i }}
+  minReplicas: {{ $.Values.worker.replicaCount }}
+  maxReplicas: {{ $.Values.worker.maxReplicas }}
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: {{ $.Values.queues.metric }}
+        selector:
+          matchLabels:
+            queue: {{ $.Values.queues.prefix }}{{ $i }}
+      target:
+        type: AverageValue
+        averageValue: {{ $.Values.queues.targetAverageValue }}
+{{- end }}

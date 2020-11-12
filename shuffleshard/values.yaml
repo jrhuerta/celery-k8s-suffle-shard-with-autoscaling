@@ -1,0 +1,30 @@
+# Default values for shuffleshard.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+domain: mk
+
+queues:
+  count: 20
+  shardSize: 5 
+  prefix: queue
+  metric: celery_queue_length
+  targetAverageValue: 50
+  brokerUrl: redis://redis:6379/0
+
+app:
+  name: web
+  image: jrhuerta/celery-demo:app
+  pullPolicy: Always
+
+worker:
+  name: worker
+  image: jrhuerta/celery-demo:worker
+  pullPolicy: Always
+  minReplicas: 1
+  maxReplicas: 10
+
+monitor:
+  name: monitor
+  image: jrhuerta/celery-demo:monitor
+  pullPolicy: Always

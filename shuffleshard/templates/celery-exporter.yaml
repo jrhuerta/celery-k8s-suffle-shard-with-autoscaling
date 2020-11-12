@@ -1,0 +1,31 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-exporter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: celery-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-exporter
+  template:
+    metadata:
+      labels:
+        app: celery-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /
+        prometheus.io/port: "9540"
+    spec:
+      containers:
+      - name: queue-monitor
+        image: ovalmoney/celery-exporter
+        env:
+        - name: CELERY_EXPORTER_BROKER_URL
+          value: {{ .Values.queues.brokerUrl }}
+        - name: CELERY_EXPORTER_NAMESPACE
+          value: {{ .Release.Namespace }}
+        imagePullPolicy: IfNotPresent
