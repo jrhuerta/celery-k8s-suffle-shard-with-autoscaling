@@ -11,7 +11,7 @@ from celery import Celery
 from flask import abort, Flask, jsonify, request
 from redis import Redis
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 fapp = Flask(__name__)
 capp = Celery(

@@ -4,6 +4,10 @@
 
 domain: mk
 
+newRelic:
+  licenseKey: notset
+  appName: celery-demo
+
 queues:
   count: 20
   shardSize: 5 

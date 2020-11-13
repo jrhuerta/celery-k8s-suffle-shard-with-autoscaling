@@ -25,6 +25,10 @@ spec:
             value: "{{ .Values.queues.count }}"
           - name: CELERY_QUEUES_PER_SET
             value: "{{ .Values.queues.shardSize}}"
+          - name: NEW_RELIC_LICENSE_KEY
+            value: "{{ .Values.newRelic.licenseKey }}"
+          - name: NEW_RELIC_APP_NAME
+            value: "{{ .Values.newRelic.appName }}"
 ---
 apiVersion: v1
 kind: Service
